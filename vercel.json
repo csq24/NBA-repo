@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/sync-boxscore",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/sync-boxscore?reconcile=1",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

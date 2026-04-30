@@ -34,3 +34,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# one-off AI review export (regenerate anytime)
+PROJECT_REVIEW_BUNDLE.txt
