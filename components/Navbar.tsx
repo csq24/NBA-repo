@@ -28,6 +28,9 @@ export function Navbar({ authEnabled }: NavbarProps) {
               >
                 Sign in
               </Link>
+              <span className="inline-block w-2 shrink-0 select-none" aria-hidden>
+                {" "}
+              </span>
               <Link
                 href="/sign-up"
                 className="rounded-full bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 transition hover:bg-zinc-200"
