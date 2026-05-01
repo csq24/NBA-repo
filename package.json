@@ -8,6 +8,7 @@
     "dev:clean": "rm -rf .next && next dev",
     "dev:clean:turbo": "rm -rf .next && next dev --turbo",
     "build": "next build",
+    "icons:pwa": "node scripts/generate-pwa-icons.mjs",
     "start": "next start",
     "lint": "next lint",
     "test:webhook": "node --env-file=.env.local scripts/test-clerk-webhook.mjs",

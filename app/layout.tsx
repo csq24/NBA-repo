@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { getClerkPublishableKey, hasClerkConfigured } from "@/lib/clerk/env";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,22 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Scoreboard",
   description: "Live scores by league (ESPN)",
+  applicationName: "Scoreboard",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "Scoreboard",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/icon-192.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#09090b",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -61,6 +78,7 @@ export default function RootLayout({
             {children}
           </>
         )}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
