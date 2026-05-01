@@ -30,7 +30,9 @@ export default function GlobalError({
       >
         <h1 style={{ fontSize: "1.125rem", fontWeight: 600 }}>Something went wrong</h1>
         <p style={{ marginTop: "0.5rem", maxWidth: "28rem", fontSize: "0.875rem", color: "#a1a1aa" }}>
-          {error.message}
+          {error && typeof error === "object" && "message" in error && typeof (error as Error).message === "string"
+            ? (error as Error).message
+            : "Something went wrong"}
         </p>
         <button
           type="button"

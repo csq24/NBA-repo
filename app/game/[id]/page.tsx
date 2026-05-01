@@ -231,8 +231,8 @@ export default async function GamePage({ params }: GamePageProps) {
   const isBasketballBox = leagueSlug === "nba" || leagueSlug === "college-basketball";
   const noBoxRows =
     !initialSnapshot ||
-    (initialSnapshot.homePlayers.length === 0 &&
-      initialSnapshot.awayPlayers.length === 0 &&
+    ((initialSnapshot.homePlayers?.length ?? 0) === 0 &&
+      (initialSnapshot.awayPlayers?.length ?? 0) === 0 &&
       !initialSnapshot.home?.stats &&
       !initialSnapshot.away?.stats);
 
@@ -249,8 +249,8 @@ export default async function GamePage({ params }: GamePageProps) {
 
         const stillEmpty =
           !initialSnapshot ||
-          (initialSnapshot.homePlayers.length === 0 &&
-            initialSnapshot.awayPlayers.length === 0 &&
+          ((initialSnapshot.homePlayers?.length ?? 0) === 0 &&
+            (initialSnapshot.awayPlayers?.length ?? 0) === 0 &&
             !initialSnapshot.home?.stats &&
             !initialSnapshot.away?.stats);
 

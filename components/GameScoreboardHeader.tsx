@@ -21,17 +21,21 @@ function formatStart(iso: string): string {
 export function GameScoreboardHeader({ game }: GameScoreboardHeaderProps) {
   const home = game.home_score ?? "—";
   const away = game.away_score ?? "—";
+  const leagueLabel = (game.league ?? "").trim() || "—";
+  const homeName = (game.home_team ?? "").trim() || "Home";
+  const awayName = (game.away_team ?? "").trim() || "Away";
+  const startIso = game.start_time ?? "";
 
   return (
     <header className="border-b border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 px-4 py-8">
       <div className="mx-auto max-w-3xl">
         <p className="text-center text-xs font-medium uppercase tracking-widest text-zinc-500">
-          {game.league.toUpperCase()} · {formatStart(game.start_time)}
+          {leagueLabel.toUpperCase()} · {startIso ? formatStart(startIso) : "—"}
         </p>
 
         <div className="mt-6 flex flex-col items-stretch gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex-1 text-center sm:text-right">
-            <p className="text-lg font-semibold text-white sm:text-xl">{game.home_team}</p>
+            <p className="text-lg font-semibold text-white sm:text-xl">{homeName}</p>
             <p className="mt-2 text-4xl font-black tabular-nums text-white sm:text-5xl">{home}</p>
           </div>
 
@@ -43,7 +47,7 @@ export function GameScoreboardHeader({ game }: GameScoreboardHeaderProps) {
           </div>
 
           <div className="flex-1 text-center sm:text-left">
-            <p className="text-lg font-semibold text-white sm:text-xl">{game.away_team}</p>
+            <p className="text-lg font-semibold text-white sm:text-xl">{awayName}</p>
             <p className="mt-2 text-4xl font-black tabular-nums text-white sm:text-5xl">{away}</p>
           </div>
         </div>
