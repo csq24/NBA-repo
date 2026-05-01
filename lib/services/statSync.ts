@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getEspnBaseUrl, getEspnLeaguePath, getEspnSummaryUrls } from "@/lib/api/espn";
+import {
+  canonicalGameStatusFromKind,
+  getEspnBaseUrl,
+  getEspnLeaguePath,
+  getEspnSummaryUrls,
+  type GameStatusKind,
+} from "@/lib/api/espn";
 
 export type SyncGameStatsResult = {
   ok: boolean;
@@ -59,6 +65,7 @@ type EspnSummary = {
   header?: {
     competitions?: Array<{
       competitors?: Array<{
+        homeAway?: string;
         team?: EspnSummaryTeam;
         score?: string;
       }>;
@@ -67,6 +74,9 @@ type EspnSummary = {
           completed?: boolean;
           state?: string;
           name?: string;
+          shortDetail?: string;
+          detail?: string;
+          description?: string;
         };
       };
     }>;
@@ -218,6 +228,114 @@ const BASKETBALL_BOX_LEAGUES = new Set(["nba", "college-basketball"]);
 const HOCKEY_BOX_LEAGUES = new Set(["nhl"]);
 const BASEBALL_BOX_LEAGUES = new Set(["mlb"]);
 
+/** Leagues that receive full ESPN box score → DB sync (NBA, CBB, NHL, MLB). */
+export function isBoxScoreLeague(leagueSlug: string): boolean {
+  const k = leagueSlug.toLowerCase().trim();
+  if (SKIP_LEAGUES.has(k)) return false;
+  return (
+    BASKETBALL_BOX_LEAGUES.has(k) || HOCKEY_BOX_LEAGUES.has(k) || BASEBALL_BOX_LEAGUES.has(k)
+  );
+}
+
+function parseScoreStr(raw: string | undefined): number | null {
+  if (raw === undefined || raw === "") return null;
+  const n = Number.parseInt(String(raw), 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+function summaryCompetitionStatusKind(
+  competition: NonNullable<NonNullable<EspnSummary["header"]>["competitions"]>[number],
+): GameStatusKind {
+  const t = competition?.status?.type;
+  if (!t) return "scheduled";
+  if (t.completed === true) return "final";
+  const state = t.state;
+  if (state === "in") return "live";
+  if (state === "post") return "final";
+  if (state === "pre") return "scheduled";
+  const name = t.name ?? "";
+  if (name.includes("FINAL")) return "final";
+  if (
+    name.includes("IN_PROGRESS") ||
+    name.includes("HALFTIME") ||
+    name.includes("END_PERIOD") ||
+    name.includes("DELAYED")
+  ) {
+    return "live";
+  }
+  return "scheduled";
+}
+
+function statusDetailFromCompetition(
+  competition: NonNullable<NonNullable<EspnSummary["header"]>["competitions"]>[number],
+): string {
+  const t = competition?.status?.type;
+  return (
+    t?.shortDetail ?? t?.detail ?? t?.description ?? t?.name ?? t?.state ?? "Unknown"
+  );
+}
+
+/**
+ * Updates `public.games` status + scores from ESPN summary so DB rows are not stuck on
+ * `scheduled` when the scoreboard upsert has not run (fixes cron + game page missing box targets).
+ */
+export async function refreshGameRowFromEspn(
+  supabase: SupabaseClient,
+  game: { id: string; external_id: string; league: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const leagueSlug = game.league.toLowerCase().trim();
+  if (!isBoxScoreLeague(leagueSlug)) {
+    return { ok: true };
+  }
+
+  const path = getEspnLeaguePath(leagueSlug);
+  if (!path) {
+    return { ok: false, error: `Unknown league: ${game.league}` };
+  }
+
+  const candidates = getEspnSummaryUrls(path, game.external_id, leagueSlug);
+  const fetched = await fetchSummaryFromCandidates(candidates);
+  if (!fetched.ok) {
+    return { ok: false, error: fetched.error ?? "ESPN summary fetch failed" };
+  }
+  const summary = parseEspnSummaryFromBody(fetched.bodyText);
+  if (!summary) {
+    return { ok: false, error: "Invalid ESPN JSON" };
+  }
+
+  const competition = summary.header?.competitions?.[0];
+  if (!competition) {
+    return { ok: false, error: "Missing competition header" };
+  }
+
+  const kind = summaryCompetitionStatusKind(competition);
+  const status = canonicalGameStatusFromKind(kind);
+  const status_detail = statusDetailFromCompetition(competition);
+
+  let home_score: number | null = null;
+  let away_score: number | null = null;
+  for (const c of competition.competitors ?? []) {
+    const sc = parseScoreStr(c.score);
+    if (c.homeAway === "home") home_score = sc;
+    if (c.homeAway === "away") away_score = sc;
+  }
+
+  const { error } = await supabase
+    .from("games")
+    .update({
+      status,
+      status_detail,
+      home_score,
+      away_score,
+    })
+    .eq("id", game.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 async function ensureTeamId(
   supabase: SupabaseClient,
   leagueSlug: string,
@@ -335,6 +453,32 @@ async function syncGameStatsForRow(
   }
 
   const isFinalCompleted = summaryIsFinalCompleted(summary);
+
+  const competitionMeta = summary.header?.competitions?.[0];
+  if (competitionMeta) {
+    const kind = summaryCompetitionStatusKind(competitionMeta);
+    const status = canonicalGameStatusFromKind(kind);
+    const status_detail = statusDetailFromCompetition(competitionMeta);
+    let home_score: number | null = null;
+    let away_score: number | null = null;
+    for (const c of competitionMeta.competitors ?? []) {
+      const sc = parseScoreStr(c.score);
+      if (c.homeAway === "home") home_score = sc;
+      if (c.homeAway === "away") away_score = sc;
+    }
+    const { error: metaErr } = await supabase
+      .from("games")
+      .update({
+        status,
+        status_detail,
+        home_score,
+        away_score,
+      })
+      .eq("id", game.id);
+    if (metaErr) {
+      console.warn("[statSync] games metadata update: %s", metaErr.message);
+    }
+  }
 
   const boxPlayers = summary.boxscore?.players;
   const boxTeams = summary.boxscore?.teams;

@@ -122,8 +122,17 @@ export async function GET(req: Request) {
           .eq("status", "scheduled")
           .gte("start_time", schedFrom)
           .lte("start_time", schedTo);
-        if (scheduled.error || qErr) {
-          qErr = scheduled.error;
+
+        /** Started in the past week but still `scheduled` in DB (scoreboard upsert never ran). */
+        const staleScheduled = await supabase
+          .from("games")
+          .select("id, external_id, league, status, stats_synced")
+          .eq("status", "scheduled")
+          .lt("start_time", schedFrom)
+          .gte("start_time", new Date(Date.now() - 7 * 86400_000).toISOString());
+
+        if (scheduled.error || staleScheduled.error || qErr) {
+          qErr = scheduled.error ?? staleScheduled.error ?? qErr;
         } else {
           const byId = new Map<string, GameRow>();
           for (const r of (inProgress.data ?? []) as GameRow[]) {
@@ -133,6 +142,9 @@ export async function GET(req: Request) {
             byId.set(r.id, r);
           }
           for (const r of (scheduled.data ?? []) as GameRow[]) {
+            byId.set(r.id, r);
+          }
+          for (const r of (staleScheduled.data ?? []) as GameRow[]) {
             byId.set(r.id, r);
           }
           targets = Array.from(byId.values());

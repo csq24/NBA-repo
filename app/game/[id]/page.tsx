@@ -7,7 +7,12 @@ import { hasClerkConfigured } from "@/lib/clerk/env";
 import { loadGameBoxscore } from "@/lib/game/loadGameBoxscore";
 import { loadMatchStatsBundle } from "@/lib/match-stats/loadMatchStats";
 import type { MatchStatsBundle } from "@/lib/match-stats/types";
-import { syncGameStats, syncPregameRosterZeros } from "@/lib/services/statSync";
+import {
+  isBoxScoreLeague,
+  refreshGameRowFromEspn,
+  syncGameStats,
+  syncPregameRosterZeros,
+} from "@/lib/services/statSync";
 import { tryCreateClient } from "@/lib/supabase/server";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/serviceRole";
 import type { CommentWithAuthor, GameRow, HighlightPinRow } from "@/types/thread";
@@ -135,7 +140,25 @@ export default async function GamePage({ params }: GamePageProps) {
   if (fetched.status === "not_found") {
     notFound();
   }
-  const game = fetched.game;
+  let game = fetched.game;
+
+  const adminForRefresh = tryCreateServiceRoleClient();
+  const startedInPast =
+    game.status === "scheduled" && !Number.isNaN(Date.parse(game.start_time)) && Date.parse(game.start_time) < Date.now();
+  if (adminForRefresh && isBoxScoreLeague(game.league) && startedInPast) {
+    const meta = await refreshGameRowFromEspn(adminForRefresh, {
+      id: game.id,
+      external_id: game.external_id,
+      league: game.league,
+    });
+    if (!meta.ok) {
+      console.warn("[game page] refreshGameRowFromEspn:", meta.error);
+    }
+    const { data: refreshedRow } = await supabase.from("games").select("*").eq("id", game.id).maybeSingle();
+    if (refreshedRow) {
+      game = refreshedRow as GameRow;
+    }
+  }
 
   const { data: threadId, error: threadErr } = await supabase.rpc("ensure_thread_for_game", {
     p_game_id: game.id,
@@ -213,7 +236,7 @@ export default async function GamePage({ params }: GamePageProps) {
       !initialSnapshot.home?.stats &&
       !initialSnapshot.away?.stats);
 
-  if (isBasketballBox && noBoxRows) {
+  if (isBoxScoreLeague(game.league) && noBoxRows) {
     const admin = tryCreateServiceRoleClient();
     if (admin) {
       try {
@@ -231,7 +254,7 @@ export default async function GamePage({ params }: GamePageProps) {
             !initialSnapshot.home?.stats &&
             !initialSnapshot.away?.stats);
 
-        if (stillEmpty) {
+        if (stillEmpty && isBasketballBox) {
           const pre = await syncPregameRosterZeros(admin, game.id, game.external_id, game.league);
           if (pre.ok && !pre.skipped && (pre.playersWritten ?? 0) > 0) {
             initialSnapshot = await loadGameBoxscore(supabase, game.id);
