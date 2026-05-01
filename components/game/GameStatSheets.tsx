@@ -291,7 +291,9 @@ export function GameStatSheets({ snapshot }: GameStatSheetsProps) {
     );
   }
 
-  const { home, away, homePlayers, awayPlayers, game } = snapshot;
+  const { home, away, homePlayers: hp, awayPlayers: ap, game } = snapshot;
+  const homePlayers = hp ?? [];
+  const awayPlayers = ap ?? [];
   const hasTeamLines = Boolean(home?.stats || away?.stats);
   const hasPlayerLines = homePlayers.length > 0 || awayPlayers.length > 0;
   const isLive = game.status === "in_progress";

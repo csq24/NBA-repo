@@ -92,7 +92,8 @@ export function MatchStatsTabs({ gameId, initial }: { gameId: string; initial: M
     return () => clearInterval(id);
   }, [refresh]);
 
-  const { match, players, homeAggregate, awayAggregate, homeLabel, awayLabel } = bundle;
+  const { match, players: bundlePlayers, homeAggregate, awayAggregate, homeLabel, awayLabel } = bundle;
+  const players = bundlePlayers ?? [];
   const scoreLine =
     match != null ? `${homeLabel} ${match.home_score} — ${match.away_score} ${awayLabel}` : null;
 
